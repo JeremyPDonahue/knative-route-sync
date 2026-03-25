@@ -25,6 +25,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	batchv1alpha1 "github.com/JeremyPDonahue/kronos-operator/api/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/robfig/cron/v3"
 )
 
 // ScheduledTaskReconciler reconciles a ScheduledTask object
@@ -47,10 +49,19 @@ type ScheduledTaskReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
 func (r *ScheduledTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
-
+	var scheduledTask batchv1alpha1.ScheduledTask
+	err := r.Get(ctx, req.NamespacedName, &scheduledTask)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("ScheduledTask not found, likely deleted")
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "Failed to get ScheduledTask")
+		return ctrl.Result{}, err
+	}
+	log.Info("ScheduledTask found")
 	return ctrl.Result{}, nil
 }
 
