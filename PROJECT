@@ -6,8 +6,8 @@ cliVersion: 4.13.1
 domain: my.domain
 layout:
 - go.kubebuilder.io/v4
-projectName: kronos-operator
-repo: github.com/JeremyPDonahue/kronos-operator
+projectName: knative-route-sync
+repo: github.com/JeremyPDonahue/knative-route-sync
 resources:
 - api:
     crdVersion: v1
@@ -16,6 +16,6 @@ resources:
   domain: my.domain
   group: batch
   kind: ScheduledTask
-  path: github.com/JeremyPDonahue/kronos-operator/api/v1alpha1
+  path: github.com/JeremyPDonahue/knative-route-sync/api/v1alpha1
   version: v1alpha1
 version: "3"

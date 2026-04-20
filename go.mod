@@ -1,4 +1,4 @@
-module github.com/JeremyPDonahue/kronos-operator
+module github.com/JeremyPDonahue/knative-route-sync
 
 go 1.25.3
 

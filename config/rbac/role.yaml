@@ -5,9 +5,10 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - batch.my.domain
+  - ""
   resources:
-  - scheduledtasks
+  - endpoints
+  - services
   verbs:
   - create
   - delete
@@ -17,16 +18,24 @@ rules:
   - update
   - watch
 - apiGroups:
-  - batch.my.domain
+  - route.openshift.io
   resources:
-  - scheduledtasks/finalizers
+  - routes
   verbs:
-  - update
-- apiGroups:
-  - batch.my.domain
-  resources:
-  - scheduledtasks/status
-  verbs:
+  - create
+  - delete
   - get
+  - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - serving.knative.dev
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
