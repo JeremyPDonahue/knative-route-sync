@@ -115,18 +115,21 @@ func (r *KnativeServiceReconciler) getKourierClusterIP(ctx context.Context) (str
 	return svc.Spec.ClusterIP, nil
 }
 
-// ensureBridgeService creates/updates a headless Service and manual Endpoints in the Knative
+// ensureBridgeService creates/updates a ClusterIP Service and manual Endpoints in the Knative
 // Service's namespace so the Route can target Kourier's ClusterIP across namespaces.
 func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc *knativev1.Service, name, kourierIP string) error {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ksvc.Namespace},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
-		svc.Spec = corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: 80, TargetPort: intstr.FromInt32(80), Protocol: corev1.ProtocolTCP},
-			},
+		
+		if err := controllerutil.SetControllerReference(ksvc, svc, r.Scheme); err != nil {
+    		return err
 		}
+		
+		svc.Spec.Ports = []corev1.ServicePort{
+				{Port: 80, TargetPort: intstr.FromInt32(80), Protocol: corev1.ProtocolTCP},
+			}
 		return nil
 	})
 	if err != nil {
@@ -137,7 +140,13 @@ func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ksvc.Namespace},
 	}
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, endpoints, func() error {
+		
+		if err := controllerutil.SetControllerReference(ksvc, endpoints, r.Scheme); err != nil {
+    		return err
+		}
+		
 		endpoints.Subsets = []corev1.EndpointSubset{
+
 			{
 				Addresses: []corev1.EndpointAddress{{IP: kourierIP}},
 				Ports:     []corev1.EndpointPort{{Port: 80, Protocol: corev1.ProtocolTCP}},
@@ -158,6 +167,11 @@ func (r *KnativeServiceReconciler) ensureRoute(ctx context.Context, ksvc *knativ
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, func() error {
 		w := int32(100)
+		
+		if err := controllerutil.SetControllerReference(ksvc, route, r.Scheme); err != nil {
+    		return err
+		}
+		
 		route.Spec = routev1.RouteSpec{
 			Host: hostFromKsvc(ksvc),
 			To: routev1.RouteTargetReference{
