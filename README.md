@@ -89,12 +89,6 @@ decoupled from upstream type changes.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
 
-- **Kourier ClusterIP fetched on every reconcile** — `getKourierClusterIP`
-  does a live lookup on each reconcile loop. The IP is stable in practice but
-  the assumption is undocumented and would break silently if caching
-  configuration changes. Should watch the Kourier Service and cache the IP, or
-  at minimum add a comment documenting the assumption.
-
 - **`hostFromKsvc` has no internal guard** — the function returns an empty
   string if `Status.URL` is unset. The `IsReady()` gate in `Reconcile`
   prevents this from causing a broken Route in the normal flow, but a future

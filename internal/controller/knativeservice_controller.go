@@ -113,6 +113,10 @@ func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
+// getKourierClusterIP reads Kourier's ClusterIP from the controller-runtime cache on every
+// reconcile. The cache makes this a local read rather than an API server call. The IP is
+// stable for the lifetime of the Kourier Service — if it ever changes, bridge Endpoints
+// across all namespaces will be stale until their next reconcile loop.
 func (r *KnativeServiceReconciler) getKourierClusterIP(ctx context.Context) (string, error) {
 	var svc corev1.Service
 	if err := r.Get(ctx, types.NamespacedName{Namespace: kourierNamespace, Name: kourierServiceName}, &svc); err != nil {
