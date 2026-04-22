@@ -89,12 +89,6 @@ decoupled from upstream type changes.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
 
-- **`hostFromKsvc` has no internal guard** — the function returns an empty
-  string if `Status.URL` is unset. The `IsReady()` gate in `Reconcile`
-  prevents this from causing a broken Route in the normal flow, but a future
-  caller of `hostFromKsvc` would not be protected. Should add an explicit
-  empty-string guard inside the function.
-
 - **Test coverage at 74%** — error paths in `getKourierClusterIP`,
   `ensureBridgeService`, and `deleteRouteResources` are untested. Partial
   deletion failure scenarios (e.g. Route deleted but Endpoints deletion fails)

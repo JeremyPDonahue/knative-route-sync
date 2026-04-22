@@ -184,8 +184,13 @@ func (r *KnativeServiceReconciler) ensureRoute(ctx context.Context, ksvc *knativ
 			return err
 		}
 
+		host, err := hostFromKsvc(ksvc)
+		if err != nil {
+			return err
+		}
+
 		route.Spec = routev1.RouteSpec{
-			Host: hostFromKsvc(ksvc),
+			Host: host,
 			To: routev1.RouteTargetReference{
 				Kind:   "Service",
 				Name:   name,
@@ -223,11 +228,14 @@ func (r *KnativeServiceReconciler) deleteRouteResources(ctx context.Context, nam
 }
 
 // hostFromKsvc returns the hostname for the Route, derived from the Knative Service's status URL.
-func hostFromKsvc(ksvc *knativev1.Service) string {
+func hostFromKsvc(ksvc *knativev1.Service) (string, error) {
 	u := ksvc.Status.URL
+	if u == "" {
+		return "", fmt.Errorf("Knative Service %s/%s has no status URL", ksvc.Namespace, ksvc.Name)
+	}
 	u = strings.TrimPrefix(u, "https://")
 	u = strings.TrimPrefix(u, "http://")
-	return u
+	return u, nil
 }
 
 func (r *KnativeServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
