@@ -51,12 +51,12 @@ func (s *Service) IsReady() bool {
 }
 
 type ServiceStatus struct {
-	URL string `json:"url,omitempty"`
+	URL        string      `json:"url,omitempty"`
 	Conditions []Condition `json:"conditions,omitempty"`
 }
 
 type Condition struct {
-	Type string `json:"type"`
+	Type   string `json:"type"`
 	Status string `json:"status"`
 	Reason string `json:"reason,omitempty"`
 }

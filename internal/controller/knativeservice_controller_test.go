@@ -50,7 +50,17 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		}
 		Expect(k8sClient.Create(ctx, ksvc)).To(Succeed())
 
+		// First reconcile adds the finalizer and returns
 		_, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "not-ready-service",
+				Namespace: "default",
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Second reconcile hits the IsReady gate — no conditions set, should skip
+		_, err = reconciler.Reconcile(ctx, ctrl.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      "not-ready-service",
 				Namespace: "default",
