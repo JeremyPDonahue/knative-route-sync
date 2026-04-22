@@ -82,6 +82,35 @@ Mirror types for the Knative and OpenShift Route APIs live under `api/` as an
 Anti-Corruption Layer, keeping the operator's dependency footprint minimal and
 decoupled from upstream type changes.
 
+## Known Technical Debt
+
+- **`image: controller:latest` is a placeholder** — `config/manager/manager.yaml`
+  must be updated with a real registry image before deploying to a cluster.
+  Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
+  then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
+
+- **No status conditions** — the reconciler never writes status back to the
+  Knative Service. There is no way to observe from the object itself whether
+  the operator has successfully reconciled it or is silently failing. Should
+  implement `status.observedGeneration` and a `RouteReady` condition.
+
+- **Kourier ClusterIP fetched on every reconcile** — `getKourierClusterIP`
+  does a live lookup on each reconcile loop. The IP is stable in practice but
+  the assumption is undocumented and would break silently if caching
+  configuration changes. Should watch the Kourier Service and cache the IP, or
+  at minimum add a comment documenting the assumption.
+
+- **`hostFromKsvc` has no internal guard** — the function returns an empty
+  string if `Status.URL` is unset. The `IsReady()` gate in `Reconcile`
+  prevents this from causing a broken Route in the normal flow, but a future
+  caller of `hostFromKsvc` would not be protected. Should add an explicit
+  empty-string guard inside the function.
+
+- **Test coverage at 74%** — error paths in `getKourierClusterIP`,
+  `ensureBridgeService`, and `deleteRouteResources` are untested. Partial
+  deletion failure scenarios (e.g. Route deleted but Endpoints deletion fails)
+  are not covered.
+
 ## License
 
 Copyright 2026. Licensed under the Apache License, Version 2.0.
