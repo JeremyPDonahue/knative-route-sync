@@ -89,11 +89,6 @@ decoupled from upstream type changes.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
 
-- **No status conditions** — the reconciler never writes status back to the
-  Knative Service. There is no way to observe from the object itself whether
-  the operator has successfully reconciled it or is silently failing. Should
-  implement `status.observedGeneration` and a `RouteReady` condition.
-
 - **Kourier ClusterIP fetched on every reconcile** — `getKourierClusterIP`
   does a live lookup on each reconcile loop. The IP is stable in practice but
   the assumption is undocumented and would break silently if caching
