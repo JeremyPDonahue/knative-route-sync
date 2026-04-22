@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -20,8 +21,9 @@ var _ = Describe("KnativeServiceReconciler", func() {
 
 	BeforeEach(func() {
 		reconciler = &KnativeServiceReconciler{
-			Client: k8sClient,
-			Scheme: scheme.Scheme,
+			Client:   k8sClient,
+			Scheme:   scheme.Scheme,
+			Recorder: record.NewFakeRecorder(32),
 		}
 
 		ns := &corev1.Namespace{

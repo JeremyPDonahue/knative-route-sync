@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -46,13 +47,15 @@ const (
 // KnativeServiceReconciler watches Knative Services and manages corresponding OpenShift Routes.
 type KnativeServiceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -70,8 +73,10 @@ func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if !ksvc.DeletionTimestamp.IsZero() {
 		log.Info("Knative Service deleted, cleaning up Route resources", "name", ksvc.Name)
 		if err := r.deleteRouteResources(ctx, ksvc.Namespace, resourceName); err != nil {
+			r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "CleanupFailed", "Failed to clean up Route resources: %s", err)
 			return ctrl.Result{}, err
 		}
+		r.Recorder.Event(&ksvc, corev1.EventTypeNormal, "CleanedUp", "Route resources deleted successfully")
 		controllerutil.RemoveFinalizer(&ksvc, finalizerName)
 		return ctrl.Result{}, r.Update(ctx, &ksvc)
 	}
@@ -89,17 +94,21 @@ func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	kourierIP, err := r.getKourierClusterIP(ctx)
 	if err != nil {
 		log.Error(err, "Failed to get Kourier ClusterIP")
+		r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "KourierUnavailable", "Failed to get Kourier ClusterIP: %s", err)
 		return ctrl.Result{}, err
 	}
 
 	if err := r.ensureBridgeService(ctx, &ksvc, resourceName, kourierIP); err != nil {
+		r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "ReconcileFailed", "Failed to reconcile bridge Service: %s", err)
 		return ctrl.Result{}, err
 	}
 
 	if err := r.ensureRoute(ctx, &ksvc, resourceName); err != nil {
+		r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "ReconcileFailed", "Failed to reconcile Route: %s", err)
 		return ctrl.Result{}, err
 	}
 
+	r.Recorder.Eventf(&ksvc, corev1.EventTypeNormal, "RouteReconciled", "Route resources reconciled successfully: %s", resourceName)
 	log.Info("Route resources reconciled", "route", resourceName, "namespace", ksvc.Namespace)
 	return ctrl.Result{}, nil
 }
