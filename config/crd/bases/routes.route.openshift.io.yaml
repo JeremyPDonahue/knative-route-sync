@@ -1,0 +1,41 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: routes.route.openshift.io
+spec:
+  group: route.openshift.io
+  names:
+    kind: Route
+    listKind: RouteList
+    plural: routes
+    singular: route
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              host:
+                type: string
+              to:
+                type: object
+                properties:
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                  weight:
+                    type: integer
+                    format: int32
+              port:
+                type: object
+                properties:
+                  targetPort:
+                    x-kubernetes-int-or-string: true
