@@ -194,4 +194,86 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		// Cleanup
 		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ksvc))).To(Succeed())
 	})
+
+	It("should return an error when Kourier has no ClusterIP", func() {
+		// Remove the Kourier service created in BeforeEach
+		kourier := &corev1.Service{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      kourierServiceName,
+			Namespace: kourierNamespace,
+		}, kourier)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, kourier)).To(Succeed())
+
+		ksvc := &knativev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kourier-missing-service",
+				Namespace: "default",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ksvc)).To(Succeed())
+
+		ksvc.Status = knativev1.ServiceStatus{
+			URL: "https://kourier-missing-service.example.com",
+			Conditions: []knativev1.Condition{
+				{Type: "Ready", Status: "True"},
+			},
+		}
+		Expect(k8sClient.Status().Update(ctx, ksvc)).To(Succeed())
+
+		// First reconcile — add finalizer
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "kourier-missing-service",
+				Namespace: "default",
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Second reconcile — should fail on Kourier lookup
+		_, err = reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "kourier-missing-service",
+				Namespace: "default",
+			},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("kourier-internal"))
+	})
+
+	It("should return an error when ksvc is ready but has no URL", func() {
+		ksvc := &knativev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "no-url-service",
+				Namespace: "default",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ksvc)).To(Succeed())
+
+		// Ready: True but URL deliberately left empty
+		ksvc.Status = knativev1.ServiceStatus{
+			Conditions: []knativev1.Condition{
+				{Type: "Ready", Status: "True"},
+			},
+		}
+		Expect(k8sClient.Status().Update(ctx, ksvc)).To(Succeed())
+
+		// First reconcile — add finalizer
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "no-url-service",
+				Namespace: "default",
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Second reconcile — should fail in ensureRoute when hostFromKsvc returns error
+		_, err = reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "no-url-service",
+				Namespace: "default",
+			},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("no status URL"))
+	})
 })

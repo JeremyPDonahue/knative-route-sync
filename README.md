@@ -89,10 +89,9 @@ decoupled from upstream type changes.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
 
-- **Test coverage at 74%** — error paths in `getKourierClusterIP`,
-  `ensureBridgeService`, and `deleteRouteResources` are untested. Partial
-  deletion failure scenarios (e.g. Route deleted but Endpoints deletion fails)
-  are not covered.
+- **Test coverage at 80.7%** — partial deletion failure scenarios in
+  `deleteRouteResources` (e.g. Route deleted but Endpoints deletion fails)
+  are not covered. Requires error injection to test reliably.
 
 ## License
 
