@@ -154,7 +154,7 @@ func main() {
 	if err := (&controller.KnativeServiceReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("knativeservice"), //nolint:staticcheck // TODO: migrate to GetEventRecorder when events.EventRecorder is adopted
+		Recorder: mgr.GetEventRecorderFor("knativeservice"), //nolint:staticcheck // TODO: adopt events.EventRecorder
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "KnativeService")
 		os.Exit(1)

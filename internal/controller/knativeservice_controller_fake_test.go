@@ -79,7 +79,7 @@ func kourierSvc(clusterIP string) *corev1.Service {
 func childObjects(resourceName string) []client.Object {
 	return []client.Object{
 		&routev1.Route{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}},
-		&corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}},
+		&corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}}, //nolint:staticcheck
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}},
 	}
 }
@@ -178,7 +178,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithObjects(ksvc, kourierSvc("10.96.0.1")).
 			WithInterceptorFuncs(interceptor.Funcs{
 				Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-					if _, ok := obj.(*corev1.Endpoints); ok {
+					if _, ok := obj.(*corev1.Endpoints); ok { //nolint:staticcheck
 						return fmt.Errorf("endpoints quota exceeded")
 					}
 					return cl.Create(ctx, obj, opts...)
@@ -242,7 +242,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithObjects(objs...).
 			WithInterceptorFuncs(interceptor.Funcs{
 				Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-					if _, ok := obj.(*corev1.Endpoints); ok {
+					if _, ok := obj.(*corev1.Endpoints); ok { //nolint:staticcheck
 						return fmt.Errorf("endpoints delete failed")
 					}
 					return cl.Delete(ctx, obj, opts...)
