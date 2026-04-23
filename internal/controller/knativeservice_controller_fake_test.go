@@ -329,7 +329,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 	It("should return an error when SetControllerReference fails for bridge Endpoints", func() {
 		ksvc := readyKsvcWithFinalizer("scr-ep-err", "https://scr-ep-err.example.com")
 		ksvc.UID = uidKsvc
-		bridgeEndpoints := &corev1.Endpoints{
+		bridgeEndpoints := &corev1.Endpoints{ //nolint:staticcheck
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            routePrefix + "scr-ep-err",
 				Namespace:       "default",

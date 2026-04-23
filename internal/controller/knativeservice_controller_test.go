@@ -122,7 +122,7 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		svc := &corev1.Service{}
 		Expect(k8sClient.Get(ctx, resourceName, svc)).To(Succeed())
 
-		endpoints := &corev1.Endpoints{}
+		endpoints := &corev1.Endpoints{} //nolint:staticcheck
 		Expect(k8sClient.Get(ctx, resourceName, endpoints)).To(Succeed())
 
 		route := &routev1.Route{}
@@ -188,7 +188,7 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		}
 
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &routev1.Route{}))).To(BeTrue())
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &corev1.Endpoints{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &corev1.Endpoints{}))).To(BeTrue()) //nolint:staticcheck
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &corev1.Service{}))).To(BeTrue())
 
 		// Cleanup
