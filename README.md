@@ -89,10 +89,6 @@ decoupled from upstream type changes.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
 
-- **Test coverage at 80.7%** — partial deletion failure scenarios in
-  `deleteRouteResources` (e.g. Route deleted but Endpoints deletion fails)
-  are not covered. Requires error injection to test reliably.
-
 ## License
 
 Copyright 2026. Licensed under the Apache License, Version 2.0.
