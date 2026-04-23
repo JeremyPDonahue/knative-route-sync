@@ -84,7 +84,7 @@ decoupled from upstream type changes.
 
 ## Known Technical Debt
 
-- **`image: controller:latest` is a placeholder** — `config/manager/manager.yaml`
+- **`image: REGISTRY/knative-route-sync:TAG` is a placeholder** — `config/manager/manager.yaml`
   must be updated with a real registry image before deploying to a cluster.
   Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
   then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
