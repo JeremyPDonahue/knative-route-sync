@@ -82,12 +82,19 @@ Mirror types for the Knative and OpenShift Route APIs live under `api/` as an
 Anti-Corruption Layer, keeping the operator's dependency footprint minimal and
 decoupled from upstream type changes.
 
-## Known Technical Debt
+## Deploying
 
-- **`image: REGISTRY/knative-route-sync:TAG` is a placeholder** — `config/manager/manager.yaml`
-  must be updated with a real registry image before deploying to a cluster.
-  Build and push with `make docker-build docker-push IMG=<registry>/knative-route-sync:tag`
-  then deploy with `make deploy IMG=<registry>/knative-route-sync:tag`.
+Before deploying to a cluster, build and push the operator image to a registry
+of your choice, then deploy using that image:
+
+```sh
+make docker-build docker-push IMG=<registry>/knative-route-sync:<tag>
+make deploy IMG=<registry>/knative-route-sync:<tag>
+```
+
+The `image` field in `config/manager/manager.yaml` is intentionally left as a
+placeholder (`REGISTRY/knative-route-sync:TAG`) since the target registry
+differs per user.
 
 ## License
 
