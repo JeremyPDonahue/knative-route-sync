@@ -60,7 +60,7 @@ type RoutePort struct {
 func (r *Route) DeepCopyObject() runtime.Object {
 	out := new(Route)
 	out.TypeMeta = r.TypeMeta
-	out.ObjectMeta = *r.ObjectMeta.DeepCopy()
+	out.ObjectMeta = *r.DeepCopy()
 	out.Spec = RouteSpec{
 		Host: r.Spec.Host,
 		To: RouteTargetReference{

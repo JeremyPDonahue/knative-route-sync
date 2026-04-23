@@ -123,7 +123,7 @@ func (r *KnativeServiceReconciler) getKourierClusterIP(ctx context.Context) (str
 		return "", fmt.Errorf("getting Kourier service %s/%s: %w", kourierNamespace, kourierServiceName, err)
 	}
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		return "", fmt.Errorf("Kourier service %s/%s has no ClusterIP", kourierNamespace, kourierServiceName)
+		return "", fmt.Errorf("kourier service %s/%s has no ClusterIP", kourierNamespace, kourierServiceName)
 	}
 	return svc.Spec.ClusterIP, nil
 }
@@ -149,7 +149,7 @@ func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc
 		return fmt.Errorf("reconciling bridge Service: %w", err)
 	}
 
-	endpoints := &corev1.Endpoints{
+	endpoints := &corev1.Endpoints{ //nolint:staticcheck // TODO: migrate to discoveryv1.EndpointSlice
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ksvc.Namespace},
 	}
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, endpoints, func() error {
@@ -158,7 +158,7 @@ func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc
 			return err
 		}
 
-		endpoints.Subsets = []corev1.EndpointSubset{
+		endpoints.Subsets = []corev1.EndpointSubset{ //nolint:staticcheck
 			{
 				Addresses: []corev1.EndpointAddress{{IP: kourierIP}},
 				Ports:     []corev1.EndpointPort{{Port: 80, Protocol: corev1.ProtocolTCP}},
@@ -214,7 +214,7 @@ func (r *KnativeServiceReconciler) deleteRouteResources(ctx context.Context, nam
 		return fmt.Errorf("deleting Route: %w", err)
 	}
 
-	endpoints := &corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	endpoints := &corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}} //nolint:staticcheck
 	if err := r.Delete(ctx, endpoints); client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("deleting bridge Endpoints: %w", err)
 	}
@@ -231,7 +231,7 @@ func (r *KnativeServiceReconciler) deleteRouteResources(ctx context.Context, nam
 func hostFromKsvc(ksvc *knativev1.Service) (string, error) {
 	u := ksvc.Status.URL
 	if u == "" {
-		return "", fmt.Errorf("Knative Service %s/%s has no status URL", ksvc.Namespace, ksvc.Name)
+		return "", fmt.Errorf("knative Service %s/%s has no status URL", ksvc.Namespace, ksvc.Name)
 	}
 	u = strings.TrimPrefix(u, "https://")
 	u = strings.TrimPrefix(u, "http://")
@@ -242,7 +242,7 @@ func (r *KnativeServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&knativev1.Service{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.Endpoints{}).
+		Owns(&corev1.Endpoints{}). //nolint:staticcheck
 		Owns(&routev1.Route{}).
 		Named("knativeservice").
 		Complete(r)

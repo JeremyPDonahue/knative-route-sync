@@ -64,7 +64,7 @@ type Condition struct {
 func (s *Service) DeepCopyObject() runtime.Object {
 	out := new(Service)
 	*out = *s
-	out.ObjectMeta = *s.ObjectMeta.DeepCopy()
+	out.ObjectMeta = *s.DeepCopy()
 	if s.Status.Conditions != nil {
 		out.Status.Conditions = make([]Condition, len(s.Status.Conditions))
 		copy(out.Status.Conditions, s.Status.Conditions)

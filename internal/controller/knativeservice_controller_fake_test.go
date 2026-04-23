@@ -21,6 +21,8 @@ import (
 	routev1 "github.com/JeremyPDonahue/knative-route-sync/api/openshift/route/v1"
 )
 
+const uidKsvc = "uid-ksvc"
+
 func buildFakeReconciler(c client.Client) *KnativeServiceReconciler {
 	return &KnativeServiceReconciler{
 		Client:   c,
@@ -29,15 +31,15 @@ func buildFakeReconciler(c client.Client) *KnativeServiceReconciler {
 	}
 }
 
-func reconcileRequest(name, namespace string) ctrl.Request {
-	return ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+func reconcileRequest(name string) ctrl.Request {
+	return ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "default"}}
 }
 
-func readyKsvcWithFinalizer(name, namespace, url string) *knativev1.Service {
+func readyKsvcWithFinalizer(name, url string) *knativev1.Service {
 	return &knativev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       name,
-			Namespace:  namespace,
+			Namespace:  "default",
 			Finalizers: []string{finalizerName},
 		},
 		Status: knativev1.ServiceStatus{
@@ -49,12 +51,12 @@ func readyKsvcWithFinalizer(name, namespace, url string) *knativev1.Service {
 	}
 }
 
-func deletingKsvc(name, namespace string) *knativev1.Service {
+func deletingKsvc(name string) *knativev1.Service {
 	now := metav1.Now()
 	return &knativev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
-			Namespace:         namespace,
+			Namespace:         "default",
 			Finalizers:        []string{finalizerName},
 			DeletionTimestamp: &now,
 		},
@@ -113,7 +115,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("get-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("get-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("storage unavailable"))
 	})
@@ -132,25 +134,25 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("update-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("update-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("etcd write failed"))
 	})
 
 	It("should return an error when Kourier ClusterIP is None", func() {
-		ksvc := readyKsvcWithFinalizer("headless-kourier", "default", "https://headless-kourier.example.com")
+		ksvc := readyKsvcWithFinalizer("headless-kourier", "https://headless-kourier.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
 			WithObjects(ksvc, kourierSvc("None")).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("headless-kourier", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("headless-kourier"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("no ClusterIP"))
 	})
 
 	It("should return an error when bridge Service creation fails", func() {
-		ksvc := readyKsvcWithFinalizer("bridge-svc-err", "default", "https://bridge-svc-err.example.com")
+		ksvc := readyKsvcWithFinalizer("bridge-svc-err", "https://bridge-svc-err.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
 			WithObjects(ksvc, kourierSvc("10.96.0.1")).
@@ -164,13 +166,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("bridge-svc-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("bridge-svc-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Service"))
 	})
 
 	It("should return an error when bridge Endpoints creation fails", func() {
-		ksvc := readyKsvcWithFinalizer("bridge-ep-err", "default", "https://bridge-ep-err.example.com")
+		ksvc := readyKsvcWithFinalizer("bridge-ep-err", "https://bridge-ep-err.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
 			WithObjects(ksvc, kourierSvc("10.96.0.1")).
@@ -184,13 +186,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("bridge-ep-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("bridge-ep-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Endpoints"))
 	})
 
 	It("should return an error when Route creation fails", func() {
-		ksvc := readyKsvcWithFinalizer("route-create-err", "default", "https://route-create-err.example.com")
+		ksvc := readyKsvcWithFinalizer("route-create-err", "https://route-create-err.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
 			WithObjects(ksvc, kourierSvc("10.96.0.1")).
@@ -204,13 +206,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("route-create-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("route-create-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling Route"))
 	})
 
 	It("should return an error when Route deletion fails during cleanup", func() {
-		ksvc := deletingKsvc("del-route-err", "default")
+		ksvc := deletingKsvc("del-route-err")
 		rName := routePrefix + "del-route-err"
 		objs := append([]client.Object{ksvc}, childObjects(rName)...)
 		c := fake.NewClientBuilder().
@@ -226,13 +228,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-route-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-route-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("deleting Route"))
 	})
 
 	It("should return an error when Endpoints deletion fails during cleanup", func() {
-		ksvc := deletingKsvc("del-ep-err", "default")
+		ksvc := deletingKsvc("del-ep-err")
 		rName := routePrefix + "del-ep-err"
 		objs := append([]client.Object{ksvc}, childObjects(rName)...)
 		c := fake.NewClientBuilder().
@@ -248,13 +250,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-ep-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-ep-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("deleting bridge Endpoints"))
 	})
 
 	It("should return an error when Service deletion fails during cleanup", func() {
-		ksvc := deletingKsvc("del-svc-err", "default")
+		ksvc := deletingKsvc("del-svc-err")
 		rName := routePrefix + "del-svc-err"
 		objs := append([]client.Object{ksvc}, childObjects(rName)...)
 		c := fake.NewClientBuilder().
@@ -270,13 +272,13 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-svc-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-svc-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("deleting bridge Service"))
 	})
 
 	It("should return an error when Update fails after removing finalizer", func() {
-		ksvc := deletingKsvc("del-update-err", "default")
+		ksvc := deletingKsvc("del-update-err")
 		rName := routePrefix + "del-update-err"
 		objs := append([]client.Object{ksvc}, childObjects(rName)...)
 		c := fake.NewClientBuilder().
@@ -289,7 +291,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			}).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-update-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-update-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("finalizer removal failed"))
 	})
@@ -299,14 +301,14 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithScheme(scheme.Scheme).
 			Build()
 
-		result, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("gone", "default"))
+		result, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("gone"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(ctrl.Result{}))
 	})
 
 	It("should return an error when SetControllerReference fails for bridge Service", func() {
-		ksvc := readyKsvcWithFinalizer("scr-svc-err", "default", "https://scr-svc-err.example.com")
-		ksvc.UID = "uid-ksvc"
+		ksvc := readyKsvcWithFinalizer("scr-svc-err", "https://scr-svc-err.example.com")
+		ksvc.UID = uidKsvc
 		bridgeSvc := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            routePrefix + "scr-svc-err",
@@ -319,14 +321,14 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithObjects(ksvc, kourierSvc("10.96.0.1"), bridgeSvc).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-svc-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-svc-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Service"))
 	})
 
 	It("should return an error when SetControllerReference fails for bridge Endpoints", func() {
-		ksvc := readyKsvcWithFinalizer("scr-ep-err", "default", "https://scr-ep-err.example.com")
-		ksvc.UID = "uid-ksvc"
+		ksvc := readyKsvcWithFinalizer("scr-ep-err", "https://scr-ep-err.example.com")
+		ksvc.UID = uidKsvc
 		bridgeEndpoints := &corev1.Endpoints{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            routePrefix + "scr-ep-err",
@@ -339,14 +341,14 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithObjects(ksvc, kourierSvc("10.96.0.1"), bridgeEndpoints).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-ep-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-ep-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Endpoints"))
 	})
 
 	It("should return an error when SetControllerReference fails for Route", func() {
-		ksvc := readyKsvcWithFinalizer("scr-route-err", "default", "https://scr-route-err.example.com")
-		ksvc.UID = "uid-ksvc"
+		ksvc := readyKsvcWithFinalizer("scr-route-err", "https://scr-route-err.example.com")
+		ksvc.UID = uidKsvc
 		existingRoute := &routev1.Route{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            routePrefix + "scr-route-err",
@@ -359,7 +361,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 			WithObjects(ksvc, kourierSvc("10.96.0.1"), existingRoute).
 			Build()
 
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-route-err", "default"))
+		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-route-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling Route"))
 	})
@@ -375,7 +377,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		r := &KnativeServiceReconciler{
 			Client:   mgr.GetClient(),
 			Scheme:   mgr.GetScheme(),
-			Recorder: mgr.GetEventRecorderFor("test"),
+			Recorder: mgr.GetEventRecorderFor("test"), //nolint:staticcheck
 		}
 		Expect(r.SetupWithManager(mgr)).To(Succeed())
 	})
