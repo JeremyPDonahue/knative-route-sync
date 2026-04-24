@@ -7,16 +7,19 @@ OpenShift Routes so they are reachable through the cluster's ingress layer.
 
 On OpenShift clusters running Knative, the default Knative ingress (Kourier)
 is not integrated with the OpenShift Router. This operator bridges the gap by
-watching every Knative Service and reconciling three resources:
+watching every Knative Service and reconciling two resources:
 
-- A **ClusterIP Service** with manual Endpoints pointing at Kourier's internal
-  ClusterIP — bridging the namespace boundary between the workload and
-  `knative-serving`.
-- An **Endpoints** object wiring the bridge Service to Kourier.
+- An **ExternalName Service** that resolves to
+  `kourier-internal.kourier-system.svc.cluster.local`, bridging the namespace
+  boundary without requiring a manual Endpoints object.
 - An **OpenShift Route** targeting the bridge Service with the hostname derived
   from the Knative Service's status URL.
 
-When a Knative Service is deleted, all three resources are cleaned up via a
+The OpenShift Router resolves the ExternalName CNAME at the HAProxy level,
+routing external traffic to Kourier which then dispatches to the correct
+Knative Service revision.
+
+When a Knative Service is deleted, both resources are cleaned up via a
 finalizer.
 
 ## Prerequisites
@@ -76,7 +79,7 @@ go tool cover -html=cover.out
 
 The operator uses controller-runtime with a single controller —
 `KnativeServiceReconciler` — that watches `serving.knative.dev/v1/Service`
-objects and owns the bridge Service, Endpoints, and Route as child resources.
+objects and owns the ExternalName bridge Service and Route as child resources.
 
 Mirror types for the Knative and OpenShift Route APIs live under `api/` as an
 Anti-Corruption Layer, keeping the operator's dependency footprint minimal and
