@@ -84,17 +84,20 @@ decoupled from upstream type changes.
 
 ## Deploying
 
-Before deploying to a cluster, build and push the operator image to a registry
-of your choice, then deploy using that image:
+The default image target is the OpenShift Local internal registry under the
+`platform-custom-operators` project. Ensure that project exists, then:
+
+```sh
+make docker-build docker-push
+make deploy
+```
+
+To deploy to a different cluster or registry, override `IMG` at the command line:
 
 ```sh
 make docker-build docker-push IMG=<registry>/knative-route-sync:<tag>
 make deploy IMG=<registry>/knative-route-sync:<tag>
 ```
-
-The `image` field in `config/manager/manager.yaml` is intentionally left as a
-placeholder (`REGISTRY/knative-route-sync:TAG`) since the target registry
-differs per user.
 
 ## License
 

@@ -63,7 +63,7 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: REGISTRY/knative-route-sync:TAG  # replace before deploying: make docker-build docker-push IMG=<registry>/knative-route-sync:<tag>
+        image: default-route-openshift-image-registry.apps-crc.testing/platform-custom-operators/knative-route-sync:latest
         name: manager
         securityContext:
           readOnlyRootFilesystem: true
