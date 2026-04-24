@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"encoding/json"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -37,7 +39,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 type Service struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Status            ServiceStatus `json:"status,omitempty"`
+	Spec              json.RawMessage `json:"spec,omitempty"`
+	Status            ServiceStatus   `json:"status,omitempty"`
 }
 
 func (s *Service) IsReady() bool {
@@ -65,6 +68,10 @@ func (s *Service) DeepCopyObject() runtime.Object {
 	out := new(Service)
 	*out = *s
 	out.ObjectMeta = *s.DeepCopy()
+	if s.Spec != nil {
+		out.Spec = make(json.RawMessage, len(s.Spec))
+		copy(out.Spec, s.Spec)
+	}
 	if s.Status.Conditions != nil {
 		out.Status.Conditions = make([]Condition, len(s.Status.Conditions))
 		copy(out.Status.Conditions, s.Status.Conditions)
