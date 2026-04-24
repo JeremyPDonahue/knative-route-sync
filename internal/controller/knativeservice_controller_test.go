@@ -25,22 +25,6 @@ var _ = Describe("KnativeServiceReconciler", func() {
 			Scheme:   scheme.Scheme,
 			Recorder: record.NewFakeRecorder(32),
 		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: kourierNamespace},
-		}
-		_ = k8sClient.Create(ctx, ns)
-
-		kourier := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      kourierServiceName,
-				Namespace: kourierNamespace,
-			},
-			Spec: corev1.ServiceSpec{
-				Ports: []corev1.ServicePort{{Port: 80}},
-			},
-		}
-		_ = k8sClient.Create(ctx, kourier)
 	})
 
 	It("should not create resources when ksvc is not ready", func() {
@@ -78,7 +62,7 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("should create bridge Service, Endpoints, and Route when ksvc is ready", func() {
+	It("should create bridge Service and Route when ksvc is ready", func() {
 		ksvc := &knativev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "ready-service",
@@ -121,9 +105,8 @@ var _ = Describe("KnativeServiceReconciler", func() {
 
 		svc := &corev1.Service{}
 		Expect(k8sClient.Get(ctx, resourceName, svc)).To(Succeed())
-
-		endpoints := &corev1.Endpoints{} //nolint:staticcheck
-		Expect(k8sClient.Get(ctx, resourceName, endpoints)).To(Succeed())
+		Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeExternalName))
+		Expect(svc.Spec.ExternalName).To(Equal(kourierExternalName))
 
 		route := &routev1.Route{}
 		Expect(k8sClient.Get(ctx, resourceName, route)).To(Succeed())
@@ -188,56 +171,10 @@ var _ = Describe("KnativeServiceReconciler", func() {
 		}
 
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &routev1.Route{}))).To(BeTrue())
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &corev1.Endpoints{}))).To(BeTrue()) //nolint:staticcheck
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, resourceName, &corev1.Service{}))).To(BeTrue())
 
 		// Cleanup
 		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ksvc))).To(Succeed())
-	})
-
-	It("should return an error when Kourier has no ClusterIP", func() {
-		// Remove the Kourier service created in BeforeEach
-		kourier := &corev1.Service{}
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      kourierServiceName,
-			Namespace: kourierNamespace,
-		}, kourier)).To(Succeed())
-		Expect(k8sClient.Delete(ctx, kourier)).To(Succeed())
-
-		ksvc := &knativev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "kourier-missing-service",
-				Namespace: "default",
-			},
-		}
-		Expect(k8sClient.Create(ctx, ksvc)).To(Succeed())
-
-		ksvc.Status = knativev1.ServiceStatus{
-			URL: "https://kourier-missing-service.example.com",
-			Conditions: []knativev1.Condition{
-				{Type: "Ready", Status: "True"},
-			},
-		}
-		Expect(k8sClient.Status().Update(ctx, ksvc)).To(Succeed())
-
-		// First reconcile — add finalizer
-		_, err := reconciler.Reconcile(ctx, ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "kourier-missing-service",
-				Namespace: "default",
-			},
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Second reconcile — should fail on Kourier lookup
-		_, err = reconciler.Reconcile(ctx, ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "kourier-missing-service",
-				Namespace: "default",
-			},
-		})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("kourier-internal"))
 	})
 
 	It("should return an error when ksvc is ready but has no URL", func() {

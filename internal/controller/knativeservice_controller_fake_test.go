@@ -63,23 +63,9 @@ func deletingKsvc(name string) *knativev1.Service {
 	}
 }
 
-func kourierSvc(clusterIP string) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      kourierServiceName,
-			Namespace: kourierNamespace,
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: clusterIP,
-			Ports:     []corev1.ServicePort{{Port: 80}},
-		},
-	}
-}
-
 func childObjects(resourceName string) []client.Object {
 	return []client.Object{
 		&routev1.Route{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}},
-		&corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}}, //nolint:staticcheck
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"}},
 	}
 }
@@ -139,23 +125,11 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		Expect(err.Error()).To(ContainSubstring("etcd write failed"))
 	})
 
-	It("should return an error when Kourier ClusterIP is None", func() {
-		ksvc := readyKsvcWithFinalizer("headless-kourier", "https://headless-kourier.example.com")
-		c := fake.NewClientBuilder().
-			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("None")).
-			Build()
-
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("headless-kourier"))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("no ClusterIP"))
-	})
-
 	It("should return an error when bridge Service creation fails", func() {
 		ksvc := readyKsvcWithFinalizer("bridge-svc-err", "https://bridge-svc-err.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1")).
+			WithObjects(ksvc).
 			WithInterceptorFuncs(interceptor.Funcs{
 				Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 					if _, ok := obj.(*corev1.Service); ok {
@@ -171,31 +145,11 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Service"))
 	})
 
-	It("should return an error when bridge Endpoints creation fails", func() {
-		ksvc := readyKsvcWithFinalizer("bridge-ep-err", "https://bridge-ep-err.example.com")
-		c := fake.NewClientBuilder().
-			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1")).
-			WithInterceptorFuncs(interceptor.Funcs{
-				Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-					if _, ok := obj.(*corev1.Endpoints); ok { //nolint:staticcheck
-						return fmt.Errorf("endpoints quota exceeded")
-					}
-					return cl.Create(ctx, obj, opts...)
-				},
-			}).
-			Build()
-
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("bridge-ep-err"))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("reconciling bridge Endpoints"))
-	})
-
 	It("should return an error when Route creation fails", func() {
 		ksvc := readyKsvcWithFinalizer("route-create-err", "https://route-create-err.example.com")
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1")).
+			WithObjects(ksvc).
 			WithInterceptorFuncs(interceptor.Funcs{
 				Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 					if _, ok := obj.(*routev1.Route); ok {
@@ -231,28 +185,6 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-route-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("deleting Route"))
-	})
-
-	It("should return an error when Endpoints deletion fails during cleanup", func() {
-		ksvc := deletingKsvc("del-ep-err")
-		rName := routePrefix + "del-ep-err"
-		objs := append([]client.Object{ksvc}, childObjects(rName)...)
-		c := fake.NewClientBuilder().
-			WithScheme(scheme.Scheme).
-			WithObjects(objs...).
-			WithInterceptorFuncs(interceptor.Funcs{
-				Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-					if _, ok := obj.(*corev1.Endpoints); ok { //nolint:staticcheck
-						return fmt.Errorf("endpoints delete failed")
-					}
-					return cl.Delete(ctx, obj, opts...)
-				},
-			}).
-			Build()
-
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("del-ep-err"))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("deleting bridge Endpoints"))
 	})
 
 	It("should return an error when Service deletion fails during cleanup", func() {
@@ -318,32 +250,12 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		}
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1"), bridgeSvc).
+			WithObjects(ksvc, bridgeSvc).
 			Build()
 
 		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-svc-err"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("reconciling bridge Service"))
-	})
-
-	It("should return an error when SetControllerReference fails for bridge Endpoints", func() {
-		ksvc := readyKsvcWithFinalizer("scr-ep-err", "https://scr-ep-err.example.com")
-		ksvc.UID = uidKsvc
-		bridgeEndpoints := &corev1.Endpoints{ //nolint:staticcheck
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            routePrefix + "scr-ep-err",
-				Namespace:       "default",
-				OwnerReferences: []metav1.OwnerReference{foreignOwnerRef()},
-			},
-		}
-		c := fake.NewClientBuilder().
-			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1"), bridgeEndpoints).
-			Build()
-
-		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-ep-err"))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("reconciling bridge Endpoints"))
 	})
 
 	It("should return an error when SetControllerReference fails for Route", func() {
@@ -358,7 +270,7 @@ var _ = Describe("KnativeServiceReconciler (fake client)", func() {
 		}
 		c := fake.NewClientBuilder().
 			WithScheme(scheme.Scheme).
-			WithObjects(ksvc, kourierSvc("10.96.0.1"), existingRoute).
+			WithObjects(ksvc, existingRoute).
 			Build()
 
 		_, err := buildFakeReconciler(c).Reconcile(ctx, reconcileRequest("scr-route-err"))

@@ -25,7 +25,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,10 +37,9 @@ import (
 )
 
 const (
-	finalizerName      = "knative-route-sync.io/finalizer"
-	kourierNamespace   = "knative-serving"
-	kourierServiceName = "kourier-internal"
-	routePrefix        = "knative-route-"
+	finalizerName       = "knative-route-sync.io/finalizer"
+	kourierExternalName = "kourier-internal.kourier-system.svc.cluster.local"
+	routePrefix         = "knative-route-"
 )
 
 // KnativeServiceReconciler watches Knative Services and manages corresponding OpenShift Routes.
@@ -52,9 +50,10 @@ type KnativeServiceReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=serving.knative.dev,resources=services,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=serving.knative.dev,resources=services/finalizers,verbs=update
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;update
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -91,14 +90,7 @@ func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	kourierIP, err := r.getKourierClusterIP(ctx)
-	if err != nil {
-		log.Error(err, "Failed to get Kourier ClusterIP")
-		r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "KourierUnavailable", "Failed to get Kourier ClusterIP: %s", err)
-		return ctrl.Result{}, err
-	}
-
-	if err := r.ensureBridgeService(ctx, &ksvc, resourceName, kourierIP); err != nil {
+	if err := r.ensureBridgeService(ctx, &ksvc, resourceName); err != nil {
 		r.Recorder.Eventf(&ksvc, corev1.EventTypeWarning, "ReconcileFailed", "Failed to reconcile bridge Service: %s", err)
 		return ctrl.Result{}, err
 	}
@@ -113,33 +105,18 @@ func (r *KnativeServiceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-// getKourierClusterIP reads Kourier's ClusterIP from the controller-runtime cache on every
-// reconcile. The cache makes this a local read rather than an API server call. The IP is
-// stable for the lifetime of the Kourier Service — if it ever changes, bridge Endpoints
-// across all namespaces will be stale until their next reconcile loop.
-func (r *KnativeServiceReconciler) getKourierClusterIP(ctx context.Context) (string, error) {
-	var svc corev1.Service
-	if err := r.Get(ctx, types.NamespacedName{Namespace: kourierNamespace, Name: kourierServiceName}, &svc); err != nil {
-		return "", fmt.Errorf("getting Kourier service %s/%s: %w", kourierNamespace, kourierServiceName, err)
-	}
-	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		return "", fmt.Errorf("kourier service %s/%s has no ClusterIP", kourierNamespace, kourierServiceName)
-	}
-	return svc.Spec.ClusterIP, nil
-}
-
-// ensureBridgeService creates/updates a ClusterIP Service and manual Endpoints in the Knative
-// Service's namespace so the Route can target Kourier's ClusterIP across namespaces.
-func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc *knativev1.Service, name, kourierIP string) error {
+// ensureBridgeService creates/updates an ExternalName Service in the Knative Service's namespace
+// that resolves to Kourier's internal service, allowing the Route to target Kourier cross-namespace.
+func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc *knativev1.Service, name string) error {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ksvc.Namespace},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
-
 		if err := controllerutil.SetControllerReference(ksvc, svc, r.Scheme); err != nil {
 			return err
 		}
-
+		svc.Spec.Type = corev1.ServiceTypeExternalName
+		svc.Spec.ExternalName = kourierExternalName
 		svc.Spec.Ports = []corev1.ServicePort{
 			{Port: 80, TargetPort: intstr.FromInt32(80), Protocol: corev1.ProtocolTCP},
 		}
@@ -148,28 +125,6 @@ func (r *KnativeServiceReconciler) ensureBridgeService(ctx context.Context, ksvc
 	if err != nil {
 		return fmt.Errorf("reconciling bridge Service: %w", err)
 	}
-
-	endpoints := &corev1.Endpoints{ //nolint:staticcheck // TODO: migrate to discoveryv1.EndpointSlice
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ksvc.Namespace},
-	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, endpoints, func() error {
-
-		if err := controllerutil.SetControllerReference(ksvc, endpoints, r.Scheme); err != nil {
-			return err
-		}
-
-		endpoints.Subsets = []corev1.EndpointSubset{ //nolint:staticcheck
-			{
-				Addresses: []corev1.EndpointAddress{{IP: kourierIP}},
-				Ports:     []corev1.EndpointPort{{Port: 80, Protocol: corev1.ProtocolTCP}},
-			},
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("reconciling bridge Endpoints: %w", err)
-	}
-
 	return nil
 }
 
@@ -184,21 +139,22 @@ func (r *KnativeServiceReconciler) ensureRoute(ctx context.Context, ksvc *knativ
 			return err
 		}
 
-		host, err := hostFromKsvc(ksvc)
-		if err != nil {
-			return err
+		// spec.host is immutable after creation in OpenShift; only set it for new Routes.
+		if route.Spec.Host == "" {
+			host, err := hostFromKsvc(ksvc)
+			if err != nil {
+				return err
+			}
+			route.Spec.Host = host
 		}
 
-		route.Spec = routev1.RouteSpec{
-			Host: host,
-			To: routev1.RouteTargetReference{
-				Kind:   "Service",
-				Name:   name,
-				Weight: &w,
-			},
-			Port: &routev1.RoutePort{
-				TargetPort: intstr.FromInt32(80),
-			},
+		route.Spec.To = routev1.RouteTargetReference{
+			Kind:   "Service",
+			Name:   name,
+			Weight: &w,
+		}
+		route.Spec.Port = &routev1.RoutePort{
+			TargetPort: intstr.FromInt32(80),
 		}
 		return nil
 	})
@@ -212,11 +168,6 @@ func (r *KnativeServiceReconciler) deleteRouteResources(ctx context.Context, nam
 	route := &routev1.Route{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 	if err := r.Delete(ctx, route); client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("deleting Route: %w", err)
-	}
-
-	endpoints := &corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}} //nolint:staticcheck
-	if err := r.Delete(ctx, endpoints); client.IgnoreNotFound(err) != nil {
-		return fmt.Errorf("deleting bridge Endpoints: %w", err)
 	}
 
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
@@ -242,7 +193,6 @@ func (r *KnativeServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&knativev1.Service{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.Endpoints{}). //nolint:staticcheck
 		Owns(&routev1.Route{}).
 		Named("knativeservice").
 		Complete(r)
