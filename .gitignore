@@ -30,3 +30,6 @@ go.work
 
 # Kubeconfig might contain secrets
 *.kubeconfig
+
+# Local notes and scratch docs
+docs/
